@@ -35,7 +35,7 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
       title={displayName}
       description={rider.speed ? `${rider.speed.toFixed(0)} km/h` : ''}
       anchor={{ x: 0.5, y: 0.5 }}
-      tracksViewChanges={false}
+      tracksViewChanges={true}
     >
       <View style={styles.container}>
         <View style={[styles.circle, { backgroundColor: accentColor }]}>
