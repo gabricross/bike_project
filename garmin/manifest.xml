@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:application entry="SupabaseTrackerApp" id="1f7e3c94-1a2b-4c3d-8e9f-0123456789ab" minApiLevel="3.2.0" name="@Strings.AppName" type="watch-app" version="0.0.0">
+        <iq:products>
+            <iq:product id="fenix6"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+            <iq:uses-permission id="Positioning"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>
