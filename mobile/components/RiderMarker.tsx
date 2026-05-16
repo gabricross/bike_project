@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import type { Rider } from '../lib/supabase';
-import { Colors, Shadows } from '../constants/theme';
+import { Colors } from '../constants/theme';
 
 type Props = {
   rider: Rider;
@@ -32,7 +32,8 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
       }}
       title={displayName}
       description={speedStr}
-      anchor={{ x: 0.5, y: 1 }}
+      anchor={{ x: 0.5, y: 0.85 }}
+      tracksViewChanges={Platform.OS === 'ios'}
     >
       <View style={styles.wrapper}>
         {/* Speed badge encima del pin */}
@@ -42,17 +43,20 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
           </View>
         )}
         {/* Pin principal */}
-        <View style={[styles.pin, { backgroundColor: accentColor }, Shadows.sm]}>
+        <View
+          style={[
+            styles.pin,
+            { backgroundColor: accentColor },
+          ]}
+        >
           <Ionicons
             name={isStraggler ? 'warning' : 'bicycle'}
-            size={16}
+            size={14}
             color="#fff"
           />
         </View>
         {/* Punta del pin */}
         <View style={[styles.arrow, { borderTopColor: accentColor }]} />
-        {/* Nombre debajo */}
-        <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
       </View>
     </Marker>
   );
@@ -61,7 +65,9 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
 const styles = StyleSheet.create({
   wrapper: {
     alignItems: 'center',
-    width: 70,
+    paddingHorizontal: 10,
+    paddingTop: 4,
+    paddingBottom: 2,
   },
   speedBadge: {
     paddingHorizontal: 6,
@@ -75,13 +81,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   pin: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2.5,
     borderColor: 'rgba(255,255,255,0.9)',
+    // Sombra
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   arrow: {
     width: 0,
@@ -92,15 +104,5 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
     marginTop: -1,
-  },
-  name: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    marginTop: 2,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-    textAlign: 'center',
   },
 });
