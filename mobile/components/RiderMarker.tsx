@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import type { Rider } from '../lib/supabase';
@@ -11,10 +11,6 @@ type Props = {
   isStraggler?: boolean;
 };
 
-/**
- * Marcador simplificado y robusto.
- * Usa dimensiones fijas explícitas para evitar recortes en Android.
- */
 export default function RiderMarker({ rider, isMe, isStraggler = false }: Props) {
   const displayName = isMe
     ? 'Tú'
@@ -37,13 +33,18 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={true}
     >
-      <View style={styles.container}>
-        <View style={[styles.circle, { backgroundColor: accentColor }]}>
-          <Ionicons
-            name={isStraggler ? 'warning' : 'bicycle'}
-            size={16}
-            color="#fff"
-          />
+      {/* Contenedor amplio para evitar recorte en Android */}
+      <View style={styles.outerWrap}>
+        {/* Anillo blanco */}
+        <View style={styles.ring}>
+          {/* Círculo de color con icono */}
+          <View style={[styles.inner, { backgroundColor: accentColor }]}>
+            <Ionicons
+              name={isStraggler ? 'warning' : 'bicycle'}
+              size={15}
+              color="#fff"
+            />
+          </View>
         </View>
       </View>
     </Marker>
@@ -51,24 +52,25 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
 }
 
 const styles = StyleSheet.create({
-  container: {
-    width: 44,
-    height: 44,
+  outerWrap: {
+    width: 60,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  circle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  ring: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
-    elevation: 6,
+  },
+  inner: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
