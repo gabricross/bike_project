@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { Marker } from 'react-native-maps';
-import Svg, { Circle, Text as SvgText } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import type { Rider } from '../lib/supabase';
 import { Colors } from '../constants/theme';
 
@@ -22,10 +22,6 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
     ? Colors.warning
     : Colors.secondary;
 
-  const emoji = isStraggler ? '⚠️' : '🚴';
-
-  // Usamos SVG para garantizar que Android dibuje el círculo perfecto
-  // sin problemas de recortes (clipping) típicos de los <View> con borderRadius.
   return (
     <Marker
       coordinate={{
@@ -34,42 +30,73 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
       }}
       title={displayName}
       description={rider.speed ? `${rider.speed.toFixed(0)} km/h` : ''}
-      anchor={{ x: 0.5, y: 0.5 }}
-      tracksViewChanges={Platform.OS === 'android'}
+      // NOTA CRÍTICA: En Android, usar la prop `anchor` personalizada recorta los marcadores custom.
+      // Por eso NO usamos `anchor` aquí, y diseñamos el marcador como un "pin" clásico 
+      // donde la punta inferior apunta a la coordenada exacta.
+      tracksViewChanges={true}
     >
-      <View style={styles.container} collapsable={false}>
-        <Svg width="44" height="44" viewBox="0 0 44 44">
-          {/* Borde blanco exterior */}
-          <Circle cx="22" cy="22" r="20" fill="#ffffff" />
-          {/* Círculo de color principal */}
-          <Circle cx="22" cy="22" r="17" fill={accentColor} />
-          {/* Emoji centrado */}
-          <SvgText
-            x="22"
-            y="28"
-            fontSize="16"
-            textAnchor="middle"
-            alignmentBaseline="middle"
-          >
-            {emoji}
-          </SvgText>
-        </Svg>
+      <View style={styles.markerContainer}>
+        {/* Velocidad encima */}
+        {rider.speed > 0 && (
+          <View style={[styles.speedBadge, { backgroundColor: accentColor }]}>
+            <Text style={styles.speedText}>{rider.speed.toFixed(0)}</Text>
+          </View>
+        )}
+        
+        {/* Círculo con el icono original de la bici */}
+        <View style={[styles.circle, { backgroundColor: accentColor }]}>
+          <Ionicons
+            name={isStraggler ? 'warning' : 'bicycle'}
+            size={18}
+            color="#fff"
+          />
+        </View>
+        
+        {/* Punta del pin apuntando a la coordenada */}
+        <View style={[styles.triangle, { borderTopColor: accentColor }]} />
       </View>
     </Marker>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    width: 44,
-    height: 44,
+  markerContainer: {
+    alignItems: 'center',
+    // Aseguramos un contenedor lo suficientemente grande sin recortes
+    width: 60,
+    paddingBottom: 2, 
+  },
+  speedBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  speedText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  circle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    // La sombra en iOS, Android la ignora si recorta pero el SVG lo evita
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
-    elevation: 6,
+    borderWidth: 2.5,
+    borderColor: '#ffffff',
+    // Las sombras nativas a veces causan recortes en Android, mejor desactivadas en el pin
+  },
+  triangle: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: Colors.primary,
+    marginTop: -2, // Para que se solape ligeramente con el círculo
   },
 });
