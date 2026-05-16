@@ -473,6 +473,17 @@ export default function MapScreen() {
         myLocation={myLocation}
         groupCode={groupCode}
         onGroupPress={() => setShowGroupModal(true)}
+        onRiderPress={(rider) => {
+          mapRef.current?.animateToRegion(
+            {
+              latitude: rider.latitude,
+              longitude: rider.longitude,
+              latitudeDelta: 0.005,
+              longitudeDelta: 0.005,
+            },
+            600
+          );
+        }}
         stragglerIds={stragglerIds}
       />
 

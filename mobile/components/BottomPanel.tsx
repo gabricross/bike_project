@@ -11,6 +11,7 @@ type Props = {
   myLocation: { latitude: number; longitude: number } | null;
   groupCode: string | null;
   onGroupPress: () => void;
+  onRiderPress: (rider: Rider) => void;
   stragglerIds: Set<string>;
 };
 
@@ -56,6 +57,7 @@ export default function BottomPanel({
   myLocation,
   groupCode,
   onGroupPress,
+  onRiderPress,
   stragglerIds,
 }: Props) {
   const filteredRiders = groupCode
@@ -124,7 +126,12 @@ export default function BottomPanel({
             }
 
             return (
-              <View key={rider.rider_id} style={styles.riderRow}>
+              <TouchableOpacity
+                key={rider.rider_id}
+                style={styles.riderRow}
+                onPress={() => onRiderPress(rider)}
+                activeOpacity={0.6}
+              >
                 {/* Avatar */}
                 <View style={[styles.avatar, { backgroundColor: accentColor }]}>
                   <Ionicons
@@ -166,7 +173,7 @@ export default function BottomPanel({
                     </View>
                   ) : null}
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </ScrollView>
