@@ -9,9 +9,30 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false },
 });
 
+// ─── Tipos ─────────────────────────────────────────────
 export type Rider = {
   rider_id: string;
+  rider_name: string;
   latitude: number;
   longitude: number;
   last_updated: string;
+  group_code: string | null;
+};
+
+export type GroupSession = {
+  group_code: string;
+  leader_id: string;
+  group_name: string;
+  created_at: string;
+  is_active: boolean;
+};
+
+export type GroupAlert = {
+  id: number;
+  group_code: string;
+  alert_type: 'straggler' | 'disconnected' | 'danger' | 'message';
+  triggered_by: string;
+  target_rider: string | null;
+  message: string;
+  created_at: string;
 };

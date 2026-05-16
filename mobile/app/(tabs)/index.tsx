@@ -1,17 +1,38 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { StyleSheet, View, Alert, Platform } from 'react-native';
+import { StyleSheet, View, Alert } from 'react-native';
 import MapView from 'react-native-maps';
 import { StatusBar } from 'expo-status-bar';
 
 import { supabase } from '../../lib/supabase';
-import type { Rider } from '../../lib/supabase';
-import { startTracking, stopTracking, getRiderId } from '../../lib/location';
+import type { Rider, GroupAlert, GroupSession } from '../../lib/supabase';
+import {
+  startTracking,
+  stopTracking,
+  getRiderId,
+  setRiderName,
+  setCurrentGroup,
+} from '../../lib/location';
+import {
+  createGroup,
+  joinGroup,
+  leaveGroup,
+  closeGroup,
+  sendGroupAlert,
+  getDistanceMeters,
+} from '../../lib/groups';
 
 import RiderMarker from '../../components/RiderMarker';
 import BottomPanel from '../../components/BottomPanel';
 import TrackingButton from '../../components/TrackingButton';
+import GroupModal from '../../components/GroupModal';
+import GroupHUD from '../../components/GroupHUD';
+import AlertBanner from '../../components/AlertBanner';
 
-// Estilo oscuro premium para Google Maps (inspirado en Apple Maps / Uber)
+// ─── Constantes ────────────────────────────────────────
+const STRAGGLER_DISTANCE_METERS = 200; // Distancia para considerar a alguien descolgado
+const STRAGGLER_CHECK_INTERVAL = 10000; // Cada 10 segundos
+
+// Estilo oscuro premium para Google Maps
 const DARK_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#1d1d2b' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#1d1d2b' }] },
@@ -68,24 +89,33 @@ export default function MapScreen() {
   const [isTracking, setIsTracking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [myRiderId, setMyRiderId] = useState<string | null>(null);
-  const mapRef = useRef<MapView>(null);
 
-  // ─── Carga inicial + Suscripción Realtime ───────────────────────
+  // Grupo
+  const [groupCode, setGroupCode] = useState<string | null>(null);
+  const [groupName, setGroupName] = useState('Grupeta');
+  const [isLeader, setIsLeader] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+
+  // Alertas
+  const [latestAlert, setLatestAlert] = useState<GroupAlert | null>(null);
+  const [stragglerIds, setStragglerIds] = useState<Set<string>>(new Set());
+
+  const mapRef = useRef<MapView>(null);
+  const ridersRef = useRef(riders);
+  ridersRef.current = riders;
+
+  // ─── Suscripción Realtime a riders ──────────────────────────────
   useEffect(() => {
-    // Fetch estado actual
     const fetchInitial = async () => {
       const { data, error } = await supabase.from('active_riders').select('*');
       if (!error && data) {
         const map: Record<string, Rider> = {};
-        data.forEach((r: Rider) => {
-          map[r.rider_id] = r;
-        });
+        data.forEach((r: Rider) => { map[r.rider_id] = r; });
         setRiders(map);
       }
     };
     fetchInitial();
 
-    // Suscripción en tiempo real
     const channel = supabase
       .channel('realtime:active_riders')
       .on(
@@ -98,7 +128,23 @@ export default function MapScreen() {
             if (eventType === 'INSERT' || eventType === 'UPDATE') {
               updated[(newRec as Rider).rider_id] = newRec as Rider;
             } else if (eventType === 'DELETE') {
-              delete updated[(oldRec as Rider).rider_id];
+              const deletedId = (oldRec as Rider).rider_id;
+              // Si alguien de nuestro grupo se desconecta, alertar
+              if (
+                groupCode &&
+                prev[deletedId]?.group_code === groupCode &&
+                deletedId !== getRiderId()
+              ) {
+                const name = prev[deletedId]?.rider_name || deletedId.substring(0, 8);
+                sendGroupAlert(
+                  groupCode,
+                  'disconnected',
+                  getRiderId(),
+                  `${name} se ha desconectado`,
+                  deletedId
+                );
+              }
+              delete updated[deletedId];
             }
             return updated;
           });
@@ -109,11 +155,108 @@ export default function MapScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [groupCode]);
 
-  // ─── Tracking toggle ───────────────────────────────────────────
+  // ─── Suscripción Realtime a alertas del grupo ───────────────────
+  useEffect(() => {
+    if (!groupCode) return;
+
+    const alertChannel = supabase
+      .channel(`realtime:group_alerts:${groupCode}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'group_alerts',
+          filter: `group_code=eq.${groupCode}`,
+        },
+        (payload) => {
+          const newAlert = payload.new as GroupAlert;
+          setLatestAlert(newAlert);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(alertChannel);
+    };
+  }, [groupCode]);
+
+  // ─── Detección de descolgados (cada 10s) ────────────────────────
+  useEffect(() => {
+    if (!groupCode || !myRiderId) return;
+
+    const interval = setInterval(() => {
+      const currentRiders = ridersRef.current;
+      const groupRiders = Object.values(currentRiders).filter(
+        (r) => r.group_code === groupCode
+      );
+
+      if (groupRiders.length < 2) return;
+
+      // Calcular el centroide del grupo
+      const avgLat =
+        groupRiders.reduce((sum, r) => sum + r.latitude, 0) / groupRiders.length;
+      const avgLon =
+        groupRiders.reduce((sum, r) => sum + r.longitude, 0) / groupRiders.length;
+
+      const newStragglers = new Set<string>();
+
+      groupRiders.forEach((rider) => {
+        const distance = getDistanceMeters(
+          rider.latitude,
+          rider.longitude,
+          avgLat,
+          avgLon
+        );
+        if (distance > STRAGGLER_DISTANCE_METERS) {
+          newStragglers.add(rider.rider_id);
+        }
+      });
+
+      // Solo enviar alerta si hay nuevos descolgados que antes no lo estaban
+      setStragglerIds((prev) => {
+        newStragglers.forEach((id) => {
+          if (!prev.has(id) && id !== myRiderId) {
+            const name =
+              currentRiders[id]?.rider_name || id.substring(0, 8);
+            const dist = Math.round(
+              getDistanceMeters(
+                currentRiders[id].latitude,
+                currentRiders[id].longitude,
+                avgLat,
+                avgLon
+              )
+            );
+            sendGroupAlert(
+              groupCode,
+              'straggler',
+              getRiderId(),
+              `${name} está a ${dist}m del grupo`,
+              id
+            );
+          }
+        });
+        return newStragglers;
+      });
+    }, STRAGGLER_CHECK_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [groupCode, myRiderId]);
+
+  // ─── Handlers ───────────────────────────────────────────────────
   const handleTrackingPress = useCallback(async () => {
     if (isTracking) {
+      if (groupCode) {
+        if (isLeader) {
+          await closeGroup(groupCode);
+        } else {
+          await leaveGroup(getRiderId());
+        }
+        setGroupCode(null);
+        setIsLeader(false);
+      }
       await stopTracking();
       setIsTracking(false);
       setMyRiderId(null);
@@ -123,33 +266,139 @@ export default function MapScreen() {
     setIsLoading(true);
     try {
       const riderId = await startTracking(
-        // onLocationUpdate: centrar cámara en la propia posición
         (lat, lon) => {
           mapRef.current?.animateToRegion(
-            {
-              latitude: lat,
-              longitude: lon,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            },
+            { latitude: lat, longitude: lon, latitudeDelta: 0.01, longitudeDelta: 0.01 },
             800
           );
         },
-        // onError
-        (msg) => {
-          Alert.alert('Error de Ubicación', msg);
-        }
+        (msg) => Alert.alert('Error de Ubicación', msg)
       );
       setMyRiderId(riderId);
       setIsTracking(true);
     } catch {
-      // Permisos denegados — ya se mostró la alerta
+      // Permisos denegados
     } finally {
       setIsLoading(false);
     }
-  }, [isTracking]);
+  }, [isTracking, groupCode, isLeader]);
+
+  const handleCreateGroup = useCallback(
+    async (name: string) => {
+      if (!isTracking) {
+        // Auto-iniciar tracking al crear grupo
+        setIsLoading(true);
+        try {
+          setRiderName(name);
+          const riderId = await startTracking(
+            (lat, lon) => {
+              mapRef.current?.animateToRegion(
+                { latitude: lat, longitude: lon, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+                800
+              );
+            },
+            (msg) => Alert.alert('Error de Ubicación', msg)
+          );
+          setMyRiderId(riderId);
+          setIsTracking(true);
+
+          const code = await createGroup(riderId, 'Grupeta');
+          setCurrentGroup(code);
+          setGroupCode(code);
+          setGroupName('Grupeta');
+          setIsLeader(true);
+          setShowGroupModal(false);
+        } catch (e: any) {
+          Alert.alert('Error', e.message);
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        setRiderName(name);
+        const code = await createGroup(getRiderId(), 'Grupeta');
+        setCurrentGroup(code);
+        setGroupCode(code);
+        setGroupName('Grupeta');
+        setIsLeader(true);
+        setShowGroupModal(false);
+      }
+    },
+    [isTracking]
+  );
+
+  const handleJoinGroup = useCallback(
+    async (code: string, name: string) => {
+      if (!isTracking) {
+        setIsLoading(true);
+        try {
+          setRiderName(name);
+          const riderId = await startTracking(
+            (lat, lon) => {
+              mapRef.current?.animateToRegion(
+                { latitude: lat, longitude: lon, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+                800
+              );
+            },
+            (msg) => Alert.alert('Error de Ubicación', msg)
+          );
+          setMyRiderId(riderId);
+          setIsTracking(true);
+
+          const session = await joinGroup(riderId, code);
+          setCurrentGroup(code);
+          setGroupCode(code);
+          setGroupName(session.group_name);
+          setIsLeader(false);
+          setShowGroupModal(false);
+        } catch (e: any) {
+          throw e; // Re-throw para que el modal lo muestre
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        setRiderName(name);
+        const session = await joinGroup(getRiderId(), code);
+        setCurrentGroup(code);
+        setGroupCode(code);
+        setGroupName(session.group_name);
+        setIsLeader(false);
+        setShowGroupModal(false);
+      }
+    },
+    [isTracking]
+  );
+
+  const handleLeaveGroup = useCallback(async () => {
+    if (!groupCode) return;
+    if (isLeader) {
+      Alert.alert('Cerrar Grupeta', '¿Seguro? Todos los ciclistas serán expulsados.', [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar',
+          style: 'destructive',
+          onPress: async () => {
+            await closeGroup(groupCode);
+            setGroupCode(null);
+            setCurrentGroup(null);
+            setIsLeader(false);
+            setStragglerIds(new Set());
+          },
+        },
+      ]);
+    } else {
+      await leaveGroup(getRiderId());
+      setGroupCode(null);
+      setCurrentGroup(null);
+      setStragglerIds(new Set());
+    }
+  }, [groupCode, isLeader]);
 
   const ridersArray = Object.values(riders);
+
+  // Contar miembros del grupo
+  const groupMemberCount = groupCode
+    ? ridersArray.filter((r) => r.group_code === groupCode).length
+    : 0;
 
   return (
     <View style={styles.container}>
@@ -160,7 +409,7 @@ export default function MapScreen() {
         style={styles.map}
         customMapStyle={DARK_MAP_STYLE}
         initialRegion={{
-          latitude: 37.1773,  // Granada, España
+          latitude: 37.1773,
           longitude: -3.5986,
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
@@ -175,19 +424,47 @@ export default function MapScreen() {
             key={rider.rider_id}
             rider={rider}
             isMe={rider.rider_id === myRiderId}
+            isStraggler={stragglerIds.has(rider.rider_id)}
           />
         ))}
       </MapView>
 
-      {/* Botón flotante superior */}
-      <TrackingButton
-        isTracking={isTracking}
-        isLoading={isLoading}
-        onPress={handleTrackingPress}
+      {/* Zona superior: HUD de grupo o botón de tracking */}
+      {groupCode ? (
+        <GroupHUD
+          groupCode={groupCode}
+          groupName={groupName}
+          memberCount={groupMemberCount}
+          isLeader={isLeader}
+          onLeave={handleLeaveGroup}
+        />
+      ) : (
+        <TrackingButton
+          isTracking={isTracking}
+          isLoading={isLoading}
+          onPress={handleTrackingPress}
+        />
+      )}
+
+      {/* Banner de alertas */}
+      <AlertBanner alert={latestAlert} />
+
+      {/* Panel inferior */}
+      <BottomPanel
+        riders={ridersArray}
+        myRiderId={myRiderId}
+        groupCode={groupCode}
+        onGroupPress={() => setShowGroupModal(true)}
+        stragglerIds={stragglerIds}
       />
 
-      {/* Panel inferior con lista de ciclistas */}
-      <BottomPanel riders={ridersArray} myRiderId={myRiderId} />
+      {/* Modal de crear/unir grupo */}
+      <GroupModal
+        visible={showGroupModal}
+        onClose={() => setShowGroupModal(false)}
+        onCreateGroup={handleCreateGroup}
+        onJoinGroup={handleJoinGroup}
+      />
     </View>
   );
 }

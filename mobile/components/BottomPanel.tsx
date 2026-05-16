@@ -1,11 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Rider } from '../lib/supabase';
 
 type Props = {
   riders: Rider[];
   myRiderId: string | null;
+  groupCode: string | null;
+  onGroupPress: () => void;
+  stragglerIds: Set<string>;
 };
 
 function timeAgo(isoString: string): string {
@@ -19,48 +22,113 @@ function timeAgo(isoString: string): string {
 }
 
 /**
- * Panel inferior estilo "Bottom Sheet" que muestra la lista de ciclistas activos.
- * Diseño con glassmorphism, bordes suaves y tipografía limpia.
+ * Panel inferior con lista de ciclistas.
+ * Si estás en un grupo, filtra solo los de tu grupo.
+ * Muestra botón de "Grupeta" si no estás en ningún grupo.
  */
-export default function BottomPanel({ riders, myRiderId }: Props) {
+export default function BottomPanel({
+  riders,
+  myRiderId,
+  groupCode,
+  onGroupPress,
+  stragglerIds,
+}: Props) {
+  // Si estamos en un grupo, filtramos solo los del grupo
+  const filteredRiders = groupCode
+    ? riders.filter((r) => r.group_code === groupCode)
+    : riders;
+
   return (
     <View style={styles.container}>
-      {/* Handle / tirón visual */}
       <View style={styles.handle} />
 
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.liveDot} />
-          <Text style={styles.headerTitle}>En Vivo</Text>
+          <View style={[styles.liveDot, groupCode ? styles.liveDotGroup : null]} />
+          <Text style={styles.headerTitle}>
+            {groupCode ? 'Tu Grupeta' : 'En Vivo'}
+          </Text>
         </View>
-        <Text style={styles.headerCount}>{riders.length} ciclista{riders.length !== 1 ? 's' : ''}</Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.headerCount}>
+            {filteredRiders.length} ciclista{filteredRiders.length !== 1 ? 's' : ''}
+          </Text>
+          {!groupCode && (
+            <TouchableOpacity style={styles.groupBtn} onPress={onGroupPress}>
+              <Ionicons name="people" size={16} color="#FF6B35" />
+              <Text style={styles.groupBtnText}>Grupeta</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      {/* Lista de ciclistas */}
-      {riders.length === 0 ? (
+      {/* Lista */}
+      {filteredRiders.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="bicycle-outline" size={32} color="#555" />
-          <Text style={styles.emptyText}>No hay ciclistas activos</Text>
-          <Text style={styles.emptySubtext}>¡Sé el primero en compartir tu ruta!</Text>
+          <Text style={styles.emptyText}>
+            {groupCode
+              ? 'Esperando ciclistas en tu grupeta...'
+              : 'No hay ciclistas activos'}
+          </Text>
+          {!groupCode && (
+            <TouchableOpacity style={styles.emptyGroupBtn} onPress={onGroupPress}>
+              <Text style={styles.emptyGroupBtnText}>Crear o Unirse a una Grupeta</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {riders.map((rider) => {
+          {filteredRiders.map((rider) => {
             const isMe = rider.rider_id === myRiderId;
+            const isStraggler = stragglerIds.has(rider.rider_id);
             return (
               <View key={rider.rider_id} style={styles.riderRow}>
-                <View style={[styles.riderIcon, isMe ? styles.riderIconMe : styles.riderIconOther]}>
-                  <Ionicons name="bicycle" size={14} color="#fff" />
+                <View
+                  style={[
+                    styles.riderIcon,
+                    isMe
+                      ? styles.riderIconMe
+                      : isStraggler
+                      ? styles.riderIconStraggler
+                      : styles.riderIconOther,
+                  ]}
+                >
+                  <Ionicons
+                    name={isStraggler ? 'warning' : 'bicycle'}
+                    size={14}
+                    color="#fff"
+                  />
                 </View>
                 <View style={styles.riderInfo}>
                   <Text style={styles.riderName}>
-                    {isMe ? '📍 Tú' : `Ciclista ${rider.rider_id.substring(0, 8)}`}
+                    {isMe ? '📍 Tú' : rider.rider_name || `Ciclista ${rider.rider_id.substring(0, 8)}`}
                   </Text>
-                  <Text style={styles.riderTime}>{timeAgo(rider.last_updated)}</Text>
+                  <Text
+                    style={[
+                      styles.riderTime,
+                      isStraggler ? styles.riderTimeStraggler : null,
+                    ]}
+                  >
+                    {isStraggler
+                      ? '⚠️ Descolgado del grupo'
+                      : timeAgo(rider.last_updated)}
+                  </Text>
                 </View>
-                <View style={[styles.statusBadge, isMe ? styles.badgeMe : styles.badgeOther]}>
-                  <Text style={styles.statusText}>{isMe ? 'Emitiendo' : 'Activo'}</Text>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    isMe
+                      ? styles.badgeMe
+                      : isStraggler
+                      ? styles.badgeStraggler
+                      : styles.badgeOther,
+                  ]}
+                >
+                  <Text style={styles.statusText}>
+                    {isMe ? 'Tú' : isStraggler ? 'Lejos' : 'Activo'}
+                  </Text>
                 </View>
               </View>
             );
@@ -83,7 +151,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 30,
     maxHeight: '40%',
-    // Sombra hacia arriba
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.3,
@@ -110,11 +177,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   liveDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#34D399', // Verde vibrante
+    backgroundColor: '#34D399',
+  },
+  liveDotGroup: {
+    backgroundColor: '#FF6B35',
   },
   headerTitle: {
     color: '#fff',
@@ -127,6 +202,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  groupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  groupBtnText: {
+    color: '#FF6B35',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   // Empty state
   emptyState: {
     alignItems: 'center',
@@ -138,10 +227,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     marginTop: 6,
+    textAlign: 'center',
   },
-  emptySubtext: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 13,
+  emptyGroupBtn: {
+    marginTop: 10,
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  emptyGroupBtnText: {
+    color: '#FF6B35',
+    fontSize: 14,
+    fontWeight: '700',
   },
   // Rider list
   list: {
@@ -161,12 +259,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  riderIconMe: {
-    backgroundColor: '#FF6B35',
-  },
-  riderIconOther: {
-    backgroundColor: '#6C63FF',
-  },
+  riderIconMe: { backgroundColor: '#FF6B35' },
+  riderIconOther: { backgroundColor: '#6C63FF' },
+  riderIconStraggler: { backgroundColor: '#FBBF24' },
   riderInfo: {
     flex: 1,
     marginLeft: 12,
@@ -181,17 +276,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 1,
   },
+  riderTimeStraggler: {
+    color: '#FBBF24',
+  },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  badgeMe: {
-    backgroundColor: 'rgba(255, 107, 53, 0.2)',
-  },
-  badgeOther: {
-    backgroundColor: 'rgba(108, 99, 255, 0.15)',
-  },
+  badgeMe: { backgroundColor: 'rgba(255, 107, 53, 0.2)' },
+  badgeOther: { backgroundColor: 'rgba(108, 99, 255, 0.15)' },
+  badgeStraggler: { backgroundColor: 'rgba(251, 191, 36, 0.2)' },
   statusText: {
     fontSize: 11,
     fontWeight: '600',

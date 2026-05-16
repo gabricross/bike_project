@@ -2,38 +2,42 @@ import * as Location from 'expo-location';
 import { supabase } from './supabase';
 
 // ID único para esta instancia del móvil
-// En producción se usaría el ID del usuario autenticado
 const RIDER_ID = `mobile_${Math.random().toString(36).substring(2, 8)}`;
 
 let trackingSubscription: Location.LocationSubscription | null = null;
 let isTracking = false;
+let currentGroupCode: string | null = null;
+let riderName: string = 'Ciclista';
 
 /**
  * Solicita permisos de ubicación al usuario.
- * Retorna true si fueron concedidos.
  */
 export async function requestLocationPermissions(): Promise<boolean> {
   const { status: foreground } = await Location.requestForegroundPermissionsAsync();
-  if (foreground !== 'granted') {
-    return false;
-  }
-  return true;
+  return foreground === 'granted';
+}
+
+/**
+ * Establece el nombre del ciclista.
+ */
+export function setRiderName(name: string): void {
+  riderName = name;
+}
+
+/**
+ * Establece el grupo actual.
+ */
+export function setCurrentGroup(groupCode: string | null): void {
+  currentGroupCode = groupCode;
 }
 
 /**
  * Inicia el tracking GPS optimizado para batería.
  *
- * Estrategia de ahorro de batería (similar a Strava en modo background):
- * - Usa `Accuracy.Balanced` en lugar de `BestForNavigation` → reduce el uso
- *   del chip GPS de alta precisión y permite que el SO use Wi-Fi/torres celulares.
- * - `distanceInterval: 10` → solo genera un nuevo evento si el usuario se ha
- *   movido al menos 10 metros, evitando actualizaciones innecesarias cuando
- *   el ciclista está parado (semáforo, descanso).
- * - `timeInterval: 5000` → como máximo una lectura cada 5 segundos, incluso
- *   si el usuario se mueve rápido. Esto limita las escrituras a Supabase.
- *
- * En apps como Strava se usa Background Location + Kalman Filter, pero para
- * el MVP en foreground, esta configuración es un buen equilibrio precisión/batería.
+ * Estrategia de ahorro:
+ * - Accuracy.Balanced → usa Wi-Fi/torres cuando puede
+ * - distanceInterval: 10m → no actualiza si estás parado
+ * - timeInterval: 5000ms → máximo una lectura cada 5s
  */
 export async function startTracking(
   onLocationUpdate: (lat: number, lon: number) => void,
@@ -52,27 +56,28 @@ export async function startTracking(
   trackingSubscription = await Location.watchPositionAsync(
     {
       accuracy: Location.Accuracy.Balanced,
-      timeInterval: 5000,        // Máximo una lectura cada 5s
-      distanceInterval: 10,      // Solo si te mueves ≥10m
+      timeInterval: 5000,
+      distanceInterval: 10,
     },
     async (location) => {
       const { latitude, longitude } = location.coords;
 
-      // Notificar a la UI
       onLocationUpdate(latitude, longitude);
 
-      // UPSERT a Supabase
+      // UPSERT a Supabase con nombre y grupo
       const { error } = await supabase.from('active_riders').upsert(
         {
           rider_id: RIDER_ID,
+          rider_name: riderName,
           latitude,
           longitude,
+          group_code: currentGroupCode,
         },
         { onConflict: 'rider_id' }
       );
 
       if (error) {
-        console.error('Error enviando ubicación a Supabase:', error.message);
+        console.error('Error enviando ubicación:', error.message);
       }
     }
   );
@@ -89,8 +94,8 @@ export async function stopTracking(): Promise<void> {
     trackingSubscription = null;
   }
   isTracking = false;
+  currentGroupCode = null;
 
-  // Eliminar al rider de la tabla para que desaparezca del mapa de los demás
   await supabase.from('active_riders').delete().eq('rider_id', RIDER_ID);
 }
 
@@ -100,4 +105,8 @@ export function getIsTracking(): boolean {
 
 export function getRiderId(): string {
   return RIDER_ID;
+}
+
+export function getCurrentGroupCode(): string | null {
+  return currentGroupCode;
 }
