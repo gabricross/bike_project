@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
 import type { Rider } from '../lib/supabase';
 import { Colors } from '../constants/theme';
@@ -21,8 +21,6 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
     ? Colors.warning
     : Colors.secondary;
 
-  const speedDesc = rider.speed ? `${rider.speed.toFixed(0)} km/h` : '';
-
   return (
     <Marker
       coordinate={{
@@ -30,8 +28,37 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
         longitude: rider.longitude,
       }}
       title={displayName}
-      description={speedDesc}
-      pinColor={accentColor}
-    />
+      description={rider.speed ? `${rider.speed.toFixed(0)} km/h` : ''}
+      anchor={{ x: 0.5, y: 0.5 }}
+      tracksViewChanges={true}
+    >
+      <View style={styles.wrapper} collapsable={false}>
+        <View style={[styles.dot, { backgroundColor: accentColor }]} collapsable={false}>
+          <Text style={styles.emoji}>{isStraggler ? '⚠️' : '🚴'}</Text>
+        </View>
+      </View>
+    </Marker>
   );
 }
+
+const styles = StyleSheet.create({
+  wrapper: {
+    width: 80,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  dot: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0,
+  },
+  emoji: {
+    fontSize: 18,
+    textAlign: 'center',
+  },
+});
