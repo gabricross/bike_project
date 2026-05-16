@@ -60,17 +60,22 @@ export async function startTracking(
       distanceInterval: 10,
     },
     async (location) => {
-      const { latitude, longitude } = location.coords;
+      const { latitude, longitude, speed: rawSpeed } = location.coords;
+
+      // expo-location da speed en m/s, convertimos a km/h
+      // rawSpeed puede ser null o negativo si no hay dato
+      const speedKmh = rawSpeed && rawSpeed > 0 ? rawSpeed * 3.6 : 0;
 
       onLocationUpdate(latitude, longitude);
 
-      // UPSERT a Supabase con nombre y grupo
+      // UPSERT a Supabase con nombre, grupo y velocidad
       const { error } = await supabase.from('active_riders').upsert(
         {
           rider_id: RIDER_ID,
           rider_name: riderName,
           latitude,
           longitude,
+          speed: Math.round(speedKmh * 10) / 10, // 1 decimal
           group_code: currentGroupCode,
         },
         { onConflict: 'rider_id' }

@@ -2,14 +2,21 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Rider } from '../lib/supabase';
+import { getDistanceMeters } from '../lib/groups';
 
 type Props = {
   riders: Rider[];
   myRiderId: string | null;
+  myLocation: { latitude: number; longitude: number } | null;
   groupCode: string | null;
   onGroupPress: () => void;
   stragglerIds: Set<string>;
 };
+
+function formatDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(1)}km`;
+}
 
 function timeAgo(isoString: string): string {
   const seconds = Math.floor(
@@ -29,6 +36,7 @@ function timeAgo(isoString: string): string {
 export default function BottomPanel({
   riders,
   myRiderId,
+  myLocation,
   groupCode,
   onGroupPress,
   stragglerIds,
@@ -116,19 +124,30 @@ export default function BottomPanel({
                       : timeAgo(rider.last_updated)}
                   </Text>
                 </View>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    isMe
-                      ? styles.badgeMe
-                      : isStraggler
-                      ? styles.badgeStraggler
-                      : styles.badgeOther,
-                  ]}
-                >
-                  <Text style={styles.statusText}>
-                    {isMe ? 'Tú' : isStraggler ? 'Lejos' : 'Activo'}
-                  </Text>
+                {/* Métricas: velocidad y distancia */}
+                <View style={styles.metricsContainer}>
+                  <View style={styles.metricBadge}>
+                    <Ionicons name="speedometer-outline" size={10} color="rgba(255,255,255,0.5)" />
+                    <Text style={styles.metricText}>
+                      {rider.speed ? `${rider.speed.toFixed(0)}` : '0'}
+                    </Text>
+                    <Text style={styles.metricUnit}>km/h</Text>
+                  </View>
+                  {!isMe && myLocation && (
+                    <View style={styles.metricBadge}>
+                      <Ionicons name="locate-outline" size={10} color="rgba(255,255,255,0.5)" />
+                      <Text style={styles.metricText}>
+                        {formatDistance(
+                          getDistanceMeters(
+                            myLocation.latitude,
+                            myLocation.longitude,
+                            rider.latitude,
+                            rider.longitude
+                          )
+                        )}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
             );
@@ -279,17 +298,28 @@ const styles = StyleSheet.create({
   riderTimeStraggler: {
     color: '#FBBF24',
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  // Métricas (velocidad + distancia)
+  metricsContainer: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
-  badgeMe: { backgroundColor: 'rgba(255, 107, 53, 0.2)' },
-  badgeOther: { backgroundColor: 'rgba(108, 99, 255, 0.15)' },
-  badgeStraggler: { backgroundColor: 'rgba(251, 191, 36, 0.2)' },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+  metricBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  metricText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  metricUnit: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 10,
+    fontWeight: '500',
   },
 });

@@ -99,6 +99,7 @@ export default function MapScreen() {
   // Alertas
   const [latestAlert, setLatestAlert] = useState<GroupAlert | null>(null);
   const [stragglerIds, setStragglerIds] = useState<Set<string>>(new Set());
+  const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const mapRef = useRef<MapView>(null);
   const ridersRef = useRef(riders);
@@ -267,6 +268,7 @@ export default function MapScreen() {
     try {
       const riderId = await startTracking(
         (lat, lon) => {
+          setMyLocation({ latitude: lat, longitude: lon });
           mapRef.current?.animateToRegion(
             { latitude: lat, longitude: lon, latitudeDelta: 0.01, longitudeDelta: 0.01 },
             800
@@ -453,6 +455,7 @@ export default function MapScreen() {
       <BottomPanel
         riders={ridersArray}
         myRiderId={myRiderId}
+        myLocation={myLocation}
         groupCode={groupCode}
         onGroupPress={() => setShowGroupModal(true)}
         stragglerIds={stragglerIds}

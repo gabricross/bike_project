@@ -45,12 +45,13 @@ if (GROUP_CODE) {
 }
 console.log("   Enviando datos cada 5 segundos...\n");
 
-async function sendUpdate(rider, lat, lon) {
+async function sendUpdate(rider, lat, lon, speed) {
   const body = {
     rider_id: rider.id,
     rider_name: rider.name,
     latitude: lat,
     longitude: lon,
+    speed: speed,
   };
   if (GROUP_CODE) body.group_code = GROUP_CODE;
 
@@ -67,7 +68,7 @@ async function sendUpdate(rider, lat, lon) {
     });
 
     if (response.ok) {
-      console.log(`   ✅ ${rider.name} — Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`);
+      console.log(`   ✅ ${rider.name} — ${speed.toFixed(0)} km/h — Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`);
     } else {
       console.error(`   ❌ ${rider.name} — Error: ${response.status}`);
     }
@@ -96,7 +97,15 @@ setInterval(async () => {
     const lat = point.lat + (Math.random() - 0.5) * 0.0002;
     const lon = point.lon + (Math.random() - 0.5) * 0.0002;
 
-    await sendUpdate(rider, lat, lon);
+    // Velocidad simulada: ~25-32 km/h, Pedro a 0 cuando se descuelga
+    let speed;
+    if (rider.id === "sim_pedro" && tick > PEDRO_STRAGGLE_AFTER) {
+      speed = 0;
+    } else {
+      speed = 25 + Math.random() * 7; // 25-32 km/h
+    }
+
+    await sendUpdate(rider, lat, lon, speed);
   }
 }, 5000);
 

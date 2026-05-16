@@ -15,6 +15,7 @@ export type Rider = {
   rider_name: string;
   latitude: number;
   longitude: number;
+  speed: number;           // km/h
   last_updated: string;
   group_code: string | null;
 };
