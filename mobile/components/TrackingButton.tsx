@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   TouchableOpacity,
   Text,
   StyleSheet,
   View,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors, Typography, Radius, Shadows, Spacing } from '../constants/theme';
 
 type Props = {
   isTracking: boolean;
@@ -14,87 +17,118 @@ type Props = {
   onPress: () => void;
 };
 
-/**
- * Botón flotante de tracking.
- * - Cuando está inactivo: muestra un botón grande y llamativo "Compartir Ruta"
- * - Cuando está activo: cambia a un botón rojo pulsante "Detener"
- */
 export default function TrackingButton({ isTracking, isLoading, onPress }: Props) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Animación de pulso cuando está emitiendo
+  useEffect(() => {
+    if (isTracking) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.06,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isTracking]);
+
   if (isLoading) {
     return (
-      <View style={[styles.button, styles.loadingButton]}>
-        <ActivityIndicator color="#fff" size="small" />
-        <Text style={styles.buttonText}>Conectando GPS...</Text>
+      <View style={styles.wrapper}>
+        <View style={[styles.button, styles.loadingButton]}>
+          <ActivityIndicator color="#fff" size="small" />
+          <Text style={styles.buttonText}>Conectando GPS...</Text>
+        </View>
       </View>
     );
   }
 
   if (isTracking) {
     return (
-      <TouchableOpacity
-        style={[styles.button, styles.stopButton]}
-        onPress={onPress}
-        activeOpacity={0.85}
-      >
-        <View style={styles.stopIcon}>
-          <Ionicons name="stop" size={14} color="#fff" />
-        </View>
-        <Text style={styles.buttonText}>Detener Emisión</Text>
-      </TouchableOpacity>
+      <View style={styles.wrapper}>
+        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+          <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+            <LinearGradient
+              colors={Colors.gradientDanger}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.button, Shadows.glow(Colors.danger)]}
+            >
+              <View style={styles.stopIcon}>
+                <Ionicons name="stop" size={12} color="#fff" />
+              </View>
+              <Text style={styles.buttonText}>Detener</Text>
+              <View style={styles.livePulse} />
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
     );
   }
 
   return (
-    <TouchableOpacity
-      style={[styles.button, styles.startButton]}
-      onPress={onPress}
-      activeOpacity={0.85}
-    >
-      <Ionicons name="navigate" size={18} color="#fff" />
-      <Text style={styles.buttonText}>Compartir mi Ruta</Text>
-    </TouchableOpacity>
+    <View style={styles.wrapper}>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+        <LinearGradient
+          colors={Colors.gradientPrimary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.button, Shadows.md]}
+        >
+          <Ionicons name="navigate" size={18} color="#fff" />
+          <Text style={styles.buttonText}>Compartir mi Ruta</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
+  wrapper: {
     position: 'absolute',
     top: 60,
     alignSelf: 'center',
+  },
+  button: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 50,
-    // Sombra
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  startButton: {
-    backgroundColor: '#FF6B35',
-  },
-  stopButton: {
-    backgroundColor: '#EF4444',
+    paddingHorizontal: 26,
+    borderRadius: Radius.pill,
   },
   loadingButton: {
-    backgroundColor: 'rgba(50, 50, 60, 0.9)',
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.4,
+    color: Colors.text,
+    ...Typography.headline,
   },
   stopIcon: {
     width: 22,
     height: 22,
-    borderRadius: 5,
+    borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  livePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    marginLeft: 2,
   },
 });

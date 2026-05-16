@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import type { Rider } from '../lib/supabase';
+import { Colors, Shadows } from '../constants/theme';
 
 type Props = {
   rider: Rider;
@@ -10,20 +11,18 @@ type Props = {
   isStraggler?: boolean;
 };
 
-/**
- * Marcador personalizado premium.
- * - Naranja = tú
- * - Violeta = compañero de grupo
- * - Amarillo pulsante = descolgado del grupo
- */
 export default function RiderMarker({ rider, isMe, isStraggler = false }: Props) {
-  const secondsAgo = Math.floor(
-    (Date.now() - new Date(rider.last_updated).getTime()) / 1000
-  );
-
   const displayName = isMe
-    ? '📍 Tú'
-    : rider.rider_name || `Ciclista ${rider.rider_id.substring(0, 8)}`;
+    ? 'Tú'
+    : rider.rider_name || rider.rider_id.substring(0, 8);
+
+  const accentColor = isMe
+    ? Colors.primary
+    : isStraggler
+    ? Colors.warning
+    : Colors.secondary;
+
+  const speedStr = rider.speed ? `${rider.speed.toFixed(0)} km/h` : '';
 
   return (
     <Marker
@@ -32,92 +31,76 @@ export default function RiderMarker({ rider, isMe, isStraggler = false }: Props)
         longitude: rider.longitude,
       }}
       title={displayName}
-      description={
-        isStraggler
-          ? '⚠️ Descolgado del grupo'
-          : `Actualizado hace ${secondsAgo}s`
-      }
-      anchor={{ x: 0.5, y: 0.5 }}
+      description={speedStr}
+      anchor={{ x: 0.5, y: 1 }}
     >
-      <View
-        style={[
-          styles.markerOuter,
-          isMe
-            ? styles.markerMe
-            : isStraggler
-            ? styles.markerStraggler
-            : styles.markerOther,
-        ]}
-      >
-        <View
-          style={[
-            styles.markerInner,
-            isMe
-              ? styles.innerMe
-              : isStraggler
-              ? styles.innerStraggler
-              : styles.innerOther,
-          ]}
-        >
+      <View style={styles.wrapper}>
+        {/* Speed badge encima del pin */}
+        {rider.speed > 0 && (
+          <View style={[styles.speedBadge, { backgroundColor: accentColor }]}>
+            <Text style={styles.speedText}>{rider.speed.toFixed(0)}</Text>
+          </View>
+        )}
+        {/* Pin principal */}
+        <View style={[styles.pin, { backgroundColor: accentColor }, Shadows.sm]}>
           <Ionicons
             name={isStraggler ? 'warning' : 'bicycle'}
             size={16}
             color="#fff"
           />
         </View>
+        {/* Punta del pin */}
+        <View style={[styles.arrow, { borderTopColor: accentColor }]} />
+        {/* Nombre debajo */}
+        <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
       </View>
-      <View
-        style={[
-          styles.markerArrow,
-          isMe
-            ? styles.arrowMe
-            : isStraggler
-            ? styles.arrowStraggler
-            : styles.arrowOther,
-        ]}
-      />
     </Marker>
   );
 }
 
 const styles = StyleSheet.create({
-  markerOuter: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  wrapper: {
+    alignItems: 'center',
+    width: 70,
+  },
+  speedBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 3,
+  },
+  speedText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  pin: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 6,
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
-  markerMe: { backgroundColor: '#fff' },
-  markerOther: { backgroundColor: 'rgba(255,255,255,0.85)' },
-  markerStraggler: { backgroundColor: '#FBBF24' },
-  markerInner: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  innerMe: { backgroundColor: '#FF6B35' },
-  innerOther: { backgroundColor: '#6C63FF' },
-  innerStraggler: { backgroundColor: '#D97706' },
-  markerArrow: {
+  arrow: {
     width: 0,
     height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 8,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 6,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    alignSelf: 'center',
-    marginTop: -2,
+    marginTop: -1,
   },
-  arrowMe: { borderTopColor: '#fff' },
-  arrowOther: { borderTopColor: 'rgba(255,255,255,0.85)' },
-  arrowStraggler: { borderTopColor: '#FBBF24' },
+  name: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 2,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    textAlign: 'center',
+  },
 });

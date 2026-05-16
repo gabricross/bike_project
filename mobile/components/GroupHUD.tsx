@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors, Typography, Radius, Spacing, Shadows } from '../constants/theme';
 
 type Props = {
   groupCode: string;
@@ -10,10 +12,6 @@ type Props = {
   onLeave: () => void;
 };
 
-/**
- * HUD superior que muestra la info del grupo activo.
- * Reemplaza al TrackingButton cuando estás en una grupeta.
- */
 export default function GroupHUD({
   groupCode,
   groupName,
@@ -23,31 +21,38 @@ export default function GroupHUD({
 }: Props) {
   return (
     <View style={styles.container}>
-      <View style={styles.left}>
-        <View style={styles.codeBadge}>
-          <Text style={styles.codeText}>{groupCode}</Text>
-        </View>
-        <View>
-          <Text style={styles.groupName}>{groupName}</Text>
+      {/* Código con gradiente */}
+      <LinearGradient
+        colors={Colors.gradientPrimary}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.codeBadge}
+      >
+        <Text style={styles.codeText}>{groupCode}</Text>
+      </LinearGradient>
+
+      {/* Info */}
+      <View style={styles.info}>
+        <Text style={styles.groupName}>{groupName}</Text>
+        <View style={styles.memberRow}>
+          <View style={styles.memberDot} />
           <Text style={styles.memberText}>
-            {memberCount} ciclista{memberCount !== 1 ? 's' : ''} conectado
-            {memberCount !== 1 ? 's' : ''}
+            {memberCount} conectado{memberCount !== 1 ? 's' : ''}
           </Text>
         </View>
       </View>
+
+      {/* Botón salir */}
       <TouchableOpacity
-        style={[styles.leaveBtn, isLeader ? styles.closeBtnStyle : null]}
+        style={[styles.leaveBtn, isLeader && styles.leaderLeaveBtn]}
         onPress={onLeave}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
         <Ionicons
-          name={isLeader ? 'close-circle' : 'exit'}
+          name={isLeader ? 'close-circle' : 'exit-outline'}
           size={16}
-          color="#fff"
+          color={isLeader ? Colors.danger : Colors.textSecondary}
         />
-        <Text style={styles.leaveText}>
-          {isLeader ? 'Cerrar' : 'Salir'}
-        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -56,67 +61,65 @@ export default function GroupHUD({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 55,
-    left: 16,
-    right: 16,
+    top: 58,
+    left: Spacing.lg,
+    right: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(20, 20, 28, 0.92)',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    // Sombra
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 12,
+    backgroundColor: Colors.bgElevated,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  left: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    borderColor: Colors.border,
+    ...Shadows.md,
   },
   codeBadge: {
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
   },
   codeText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '900',
-    letterSpacing: 2,
+    letterSpacing: 3,
+  },
+  info: {
+    flex: 1,
   },
   groupName: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
+    color: Colors.text,
+    ...Typography.headline,
   },
-  memberText: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 12,
-    marginTop: 1,
-  },
-  leaveBtn: {
+  memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    gap: 5,
+    marginTop: 2,
   },
-  closeBtnStyle: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  memberDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.success,
   },
-  leaveText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    fontWeight: '600',
+  memberText: {
+    color: Colors.textSecondary,
+    ...Typography.caption,
+  },
+  leaveBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.bgSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  leaderLeaveBtn: {
+    backgroundColor: Colors.dangerMuted,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
   },
 });

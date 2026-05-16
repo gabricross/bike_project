@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Rider } from '../lib/supabase';
 import { getDistanceMeters } from '../lib/groups';
+import { Colors, Typography, Radius, Spacing, Shadows } from '../constants/theme';
 
 type Props = {
   riders: Rider[];
@@ -28,11 +29,27 @@ function timeAgo(isoString: string): string {
   return `hace ${minutes}min`;
 }
 
-/**
- * Panel inferior con lista de ciclistas.
- * Si estás en un grupo, filtra solo los de tu grupo.
- * Muestra botón de "Grupeta" si no estás en ningún grupo.
- */
+/** Punto verde pulsante "en vivo" */
+function LiveDot({ color = Colors.success }: { color?: string }) {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <View style={styles.liveDotContainer}>
+      <Animated.View style={[styles.liveDotOuter, { backgroundColor: color, opacity: pulse }]} />
+      <View style={[styles.liveDotInner, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
 export default function BottomPanel({
   riders,
   myRiderId,
@@ -41,48 +58,47 @@ export default function BottomPanel({
   onGroupPress,
   stragglerIds,
 }: Props) {
-  // Si estamos en un grupo, filtramos solo los del grupo
   const filteredRiders = groupCode
     ? riders.filter((r) => r.group_code === groupCode)
     : riders;
 
   return (
     <View style={styles.container}>
+      {/* Handle */}
       <View style={styles.handle} />
 
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={[styles.liveDot, groupCode ? styles.liveDotGroup : null]} />
+          <LiveDot color={groupCode ? Colors.primary : Colors.success} />
           <Text style={styles.headerTitle}>
             {groupCode ? 'Tu Grupeta' : 'En Vivo'}
           </Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{filteredRiders.length}</Text>
+          </View>
         </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.headerCount}>
-            {filteredRiders.length} ciclista{filteredRiders.length !== 1 ? 's' : ''}
-          </Text>
-          {!groupCode && (
-            <TouchableOpacity style={styles.groupBtn} onPress={onGroupPress}>
-              <Ionicons name="people" size={16} color="#FF6B35" />
-              <Text style={styles.groupBtnText}>Grupeta</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {!groupCode && (
+          <TouchableOpacity style={styles.groupBtn} onPress={onGroupPress} activeOpacity={0.7}>
+            <Ionicons name="people" size={14} color={Colors.primary} />
+            <Text style={styles.groupBtnText}>Grupeta</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Lista */}
+      {/* Empty state */}
       {filteredRiders.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="bicycle-outline" size={32} color="#555" />
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="bicycle-outline" size={36} color={Colors.textTertiary} />
+          </View>
           <Text style={styles.emptyText}>
-            {groupCode
-              ? 'Esperando ciclistas en tu grupeta...'
-              : 'No hay ciclistas activos'}
+            {groupCode ? 'Esperando ciclistas...' : 'Sin ciclistas activos'}
           </Text>
           {!groupCode && (
-            <TouchableOpacity style={styles.emptyGroupBtn} onPress={onGroupPress}>
-              <Text style={styles.emptyGroupBtnText}>Crear o Unirse a una Grupeta</Text>
+            <TouchableOpacity style={styles.emptyGroupBtn} onPress={onGroupPress} activeOpacity={0.7}>
+              <Ionicons name="add-circle" size={16} color={Colors.primary} />
+              <Text style={styles.emptyGroupBtnText}>Crear o Unirse</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -91,63 +107,64 @@ export default function BottomPanel({
           {filteredRiders.map((rider) => {
             const isMe = rider.rider_id === myRiderId;
             const isStraggler = stragglerIds.has(rider.rider_id);
+            const accentColor = isMe
+              ? Colors.primary
+              : isStraggler
+              ? Colors.warning
+              : Colors.secondary;
+
+            // Distancia
+            let distanceStr = '';
+            if (!isMe && myLocation) {
+              const d = getDistanceMeters(
+                myLocation.latitude, myLocation.longitude,
+                rider.latitude, rider.longitude
+              );
+              distanceStr = formatDistance(d);
+            }
+
             return (
               <View key={rider.rider_id} style={styles.riderRow}>
-                <View
-                  style={[
-                    styles.riderIcon,
-                    isMe
-                      ? styles.riderIconMe
-                      : isStraggler
-                      ? styles.riderIconStraggler
-                      : styles.riderIconOther,
-                  ]}
-                >
+                {/* Avatar */}
+                <View style={[styles.avatar, { backgroundColor: accentColor }]}>
                   <Ionicons
                     name={isStraggler ? 'warning' : 'bicycle'}
                     size={14}
                     color="#fff"
                   />
                 </View>
+
+                {/* Info */}
                 <View style={styles.riderInfo}>
-                  <Text style={styles.riderName}>
-                    {isMe ? '📍 Tú' : rider.rider_name || `Ciclista ${rider.rider_id.substring(0, 8)}`}
+                  <Text style={styles.riderName} numberOfLines={1}>
+                    {isMe ? 'Tú' : rider.rider_name || rider.rider_id.substring(0, 8)}
                   </Text>
                   <Text
                     style={[
-                      styles.riderTime,
-                      isStraggler ? styles.riderTimeStraggler : null,
+                      styles.riderSubtitle,
+                      isStraggler && { color: Colors.warning },
                     ]}
                   >
-                    {isStraggler
-                      ? '⚠️ Descolgado del grupo'
-                      : timeAgo(rider.last_updated)}
+                    {isStraggler ? '⚠️ Descolgado' : timeAgo(rider.last_updated)}
                   </Text>
                 </View>
-                {/* Métricas: velocidad y distancia */}
-                <View style={styles.metricsContainer}>
-                  <View style={styles.metricBadge}>
-                    <Ionicons name="speedometer-outline" size={10} color="rgba(255,255,255,0.5)" />
-                    <Text style={styles.metricText}>
-                      {rider.speed ? `${rider.speed.toFixed(0)}` : '0'}
+
+                {/* Métricas */}
+                <View style={styles.metricsCol}>
+                  {/* Velocidad */}
+                  <View style={styles.metric}>
+                    <Text style={[styles.metricValue, { color: accentColor }]}>
+                      {rider.speed ? rider.speed.toFixed(0) : '0'}
                     </Text>
                     <Text style={styles.metricUnit}>km/h</Text>
                   </View>
-                  {!isMe && myLocation && (
-                    <View style={styles.metricBadge}>
-                      <Ionicons name="locate-outline" size={10} color="rgba(255,255,255,0.5)" />
-                      <Text style={styles.metricText}>
-                        {formatDistance(
-                          getDistanceMeters(
-                            myLocation.latitude,
-                            myLocation.longitude,
-                            rider.latitude,
-                            rider.longitude
-                          )
-                        )}
-                      </Text>
+
+                  {/* Distancia */}
+                  {distanceStr ? (
+                    <View style={styles.metric}>
+                      <Text style={styles.metricValueSmall}>{distanceStr}</Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
               </View>
             );
@@ -164,162 +181,176 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(20, 20, 28, 0.92)',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-    maxHeight: '40%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 20,
+    backgroundColor: Colors.bgElevated,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: 34,
+    maxHeight: '42%',
+    borderTopWidth: 1,
+    borderColor: Colors.border,
+    ...Shadows.lg,
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: Colors.textTertiary,
     alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 14,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
   },
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: Spacing.lg,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#34D399',
-  },
-  liveDotGroup: {
-    backgroundColor: '#FF6B35',
+    gap: Spacing.sm,
   },
   headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+    color: Colors.text,
+    ...Typography.title,
   },
-  headerCount: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 13,
-    fontWeight: '500',
+  countBadge: {
+    backgroundColor: Colors.bgSubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
+  countText: {
+    color: Colors.textSecondary,
+    ...Typography.caption,
+  },
+  // Live dot animation
+  liveDotContainer: {
+    width: 12,
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveDotOuter: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  liveDotInner: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  // Group button
   groupBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 107, 53, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    gap: 5,
+    backgroundColor: Colors.primaryMuted,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 107, 53, 0.2)',
   },
   groupBtnText: {
-    color: '#FF6B35',
-    fontSize: 12,
-    fontWeight: '700',
+    color: Colors.primary,
+    ...Typography.callout,
   },
   // Empty state
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 20,
-    gap: 6,
+    paddingVertical: Spacing.xxl,
+    gap: Spacing.md,
+  },
+  emptyIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.bgSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   emptyText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 15,
-    fontWeight: '600',
-    marginTop: 6,
-    textAlign: 'center',
+    color: Colors.textSecondary,
+    ...Typography.body,
   },
   emptyGroupBtn: {
-    marginTop: 10,
-    backgroundColor: 'rgba(255, 107, 53, 0.15)',
-    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primaryMuted,
+    paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: Radius.pill,
+    marginTop: Spacing.xs,
   },
   emptyGroupBtnText: {
-    color: '#FF6B35',
-    fontSize: 14,
-    fontWeight: '700',
+    color: Colors.primary,
+    ...Typography.callout,
   },
   // Rider list
   list: {
-    maxHeight: 180,
+    maxHeight: 200,
   },
   riderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: Spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: Colors.separator,
+    gap: Spacing.md,
   },
-  riderIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  riderIconMe: { backgroundColor: '#FF6B35' },
-  riderIconOther: { backgroundColor: '#6C63FF' },
-  riderIconStraggler: { backgroundColor: '#FBBF24' },
   riderInfo: {
     flex: 1,
-    marginLeft: 12,
   },
   riderName: {
-    color: '#fff',
+    color: Colors.text,
+    ...Typography.callout,
     fontSize: 14,
-    fontWeight: '600',
   },
-  riderTime: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 12,
+  riderSubtitle: {
+    color: Colors.textTertiary,
+    ...Typography.caption,
     marginTop: 1,
   },
-  riderTimeStraggler: {
-    color: '#FBBF24',
-  },
-  // Métricas (velocidad + distancia)
-  metricsContainer: {
+  // Métricas
+  metricsCol: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 2,
   },
-  metricBadge: {
+  metric: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    alignItems: 'baseline',
+    gap: 3,
   },
-  metricText: {
-    color: 'rgba(255,255,255,0.8)',
+  metricValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  metricValueSmall: {
+    color: Colors.textSecondary,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   metricUnit: {
-    color: 'rgba(255,255,255,0.35)',
+    color: Colors.textTertiary,
     fontSize: 10,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });

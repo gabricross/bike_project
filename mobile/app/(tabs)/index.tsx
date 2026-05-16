@@ -32,55 +32,70 @@ import AlertBanner from '../../components/AlertBanner';
 const STRAGGLER_DISTANCE_METERS = 200; // Distancia para considerar a alguien descolgado
 const STRAGGLER_CHECK_INTERVAL = 10000; // Cada 10 segundos
 
-// Estilo oscuro premium para Google Maps
+// Estilo oscuro ultra-premium para Google Maps (Deep Navy)
 const DARK_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#1d1d2b' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#1d1d2b' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8a8a9a' }] },
+  { elementType: 'geometry', stylers: [{ color: '#0B0F1A' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0B0F1A' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#4a4a6a' }] },
   {
     featureType: 'administrative',
     elementType: 'geometry.stroke',
-    stylers: [{ color: '#2a2a3c' }],
+    stylers: [{ color: '#1a1f35' }],
+  },
+  {
+    featureType: 'administrative.locality',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#6366F1' }],
   },
   {
     featureType: 'poi',
     elementType: 'geometry',
-    stylers: [{ color: '#252536' }],
+    stylers: [{ color: '#111628' }],
   },
   {
     featureType: 'poi',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#6a6a7a' }],
+    stylers: [{ color: '#3a3a5a' }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'geometry',
+    stylers: [{ color: '#0d1520' }],
   },
   {
     featureType: 'road',
     elementType: 'geometry',
-    stylers: [{ color: '#2c2c40' }],
+    stylers: [{ color: '#161b2e' }],
   },
   {
     featureType: 'road',
     elementType: 'geometry.stroke',
-    stylers: [{ color: '#1b1b2a' }],
+    stylers: [{ color: '#0f1322' }],
   },
   {
     featureType: 'road.highway',
     elementType: 'geometry',
-    stylers: [{ color: '#3a3a52' }],
+    stylers: [{ color: '#1c2240' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#252d50' }],
   },
   {
     featureType: 'transit',
     elementType: 'geometry',
-    stylers: [{ color: '#252536' }],
+    stylers: [{ color: '#111628' }],
   },
   {
     featureType: 'water',
     elementType: 'geometry',
-    stylers: [{ color: '#0e0e1a' }],
+    stylers: [{ color: '#060a14' }],
   },
   {
     featureType: 'water',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#3d3d5c' }],
+    stylers: [{ color: '#1a2040' }],
   },
 ];
 
@@ -475,7 +490,7 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1d1d2b',
+    backgroundColor: '#0B0F1A',
   },
   map: {
     flex: 1,
